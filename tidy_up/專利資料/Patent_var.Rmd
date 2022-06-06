@@ -1,0 +1,253 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+library(lubridate)
+library(stringr)
+```
+
+
+
+# Patent: 公司每年專利權數量
+```{r}
+patents = read.csv('cp_patents_All_V2.csv')
+```
+
+```{r}
+#檔案太大開不了，只挑出有用的欄位
+patents_num <- patents %>% select(original_assignee, appDate, patentNumber)
+
+# appDatae轉換日期格式並取出年份
+patents_num$appDate <- ymd(patents_num$appDate) 
+patents_num$year <-year(patents_num$appDate)
+
+#整理相似公司名
+patents_num$original_assignee <- str_replace(patents_num$original_assignee, "Fujitsu Ltd and NCR International Inc", "Fujitsu Ltd")
+patents_num$original_assignee <- str_replace(patents_num$original_assignee, "International Business Machines Corporation", "International Business Machines Corp")
+patents_num$original_assignee <- str_replace(patents_num$original_assignee, "Microsoft Corporation", "Microsoft Corp")
+patents_num$original_assignee <- str_replace(patents_num$original_assignee, "SAP SE ", "SAP SE")
+patents_num$original_assignee <- gsub("[[:punct:]]","",patents_num$original_assignee)
+
+## 公司每年patents數
+patents_num_year <- aggregate(patents_num$patentNumber, list(patents_num$original_assignee,patents_num$year), length) 
+```
+
+```{r}
+patents_num_year
+```
+
+
+```{r}
+#匯出CSV檔
+# write.csv(patents_num_year,file="patents_num_year_V2.csv",row.names = F)
+```
+
+# Patent: 公司每年 FW/BK citation 數量
+```{r}
+cited = read.csv('data_cited_All.csv')
+bk_cite = read.csv('data_bk_citation_all.csv')
+
+# appDatae轉換日期格式並取出年份
+cited$appDate <- ymd(cited$appDate) 
+cited$appDate_Y <-year(cited$appDate)
+bk_cite$appDate <- ymd(bk_cite$appDate) 
+bk_cite$appDate_Y <-year(bk_cite$appDate)
+
+#整理相似公司名
+cited$original_assignee <- str_replace(cited$original_assignee, "Fujitsu Ltd and NCR International Inc", "Fujitsu Ltd")
+cited$original_assignee <- str_replace(cited$original_assignee, "International Business Machines Corporation", "International Business Machines Corp")
+cited$original_assignee <- str_replace(cited$original_assignee, "Microsoft Corporation", "Microsoft Corp")
+cited$original_assignee <- str_replace(cited$original_assignee, "SAP SE ", "SAP SE")
+cited$original_assignee <- gsub("[[:punct:]]","",cited$original_assignee)
+
+#整理相似公司名
+bk_cite$original_assignee <- str_replace(bk_cite$original_assignee, "Fujitsu Ltd and NCR International Inc", "Fujitsu Ltd")
+bk_cite$original_assignee <- str_replace(bk_cite$original_assignee, "International Business Machines Corporation", "International Business Machines Corp")
+bk_cite$original_assignee <- str_replace(bk_cite$original_assignee, "Microsoft Corporation", "Microsoft Corp")
+bk_cite$original_assignee <- str_replace(bk_cite$original_assignee, "SAP SE ", "SAP SE")
+bk_cite$original_assignee <- gsub("[[:punct:]]","",bk_cite$original_assignee)
+```
+
+```{r}
+## bk_citation 總數
+bkcite_count <- aggregate(bk_cite$patentCitation, list(bk_cite$original_assignee), length) #length 算個數
+## cited 總數
+cited_count <- aggregate(cited$cited, list(cited$original_assignee), length) #length 算個數
+```
+
+```{r}
+## 每年cited數
+cited_year <- aggregate(cited$cited, list(cited$original_assignee,cited$appDate_Y), length) 
+cited_year
+
+bkcite_year <- aggregate(bk_cite$patentCitation, list(bk_cite$original_assignee,bk_cite$appDate_Y), length) 
+bkcite_year
+```
+
+```{r}
+#匯出CSV檔
+# write.csv(cited_year,file="FW_citation_V1.csv",row.names = F)
+# write.csv(bkcite_year,file="每間公司每年cpc總數_V1.csv",row.names = F)
+```
+
+
+# Patent 公司每年 CPC類別 數量
+## Load data 跑很久，注意！！
+```{r}
+cpc = read.csv('data_bk_cpc_all.csv')
+```
+
+## 處理日期及刪除不必要文字
+```{r}
+#轉換日期格式
+cpc$appDate <- ymd(cpc$appDate) 
+cpc$appDate_Y <-year(cpc$appDate)
+
+#刪除{}
+cpc$patentCitation <- str_replace(cpc$patentCitation,'\\{', "")
+cpc$patentCitation <- str_replace(cpc$patentCitation, "\\}","")
+cpc$original_assignee <- gsub("[[:punct:]]","",cpc$original_assignee)
+# cpc$assignee <- str_trim(cpc$assignee, side = c("left"))
+
+#整理相似公司名
+cpc$original_assignee <- str_replace(cpc$original_assignee, "Fujitsu Ltd and NCR International Inc", "Fujitsu Ltd")
+cpc$original_assignee <- str_replace(cpc$original_assignee, "International Business Machines Corporation", "International Business Machines Corp")
+cpc$original_assignee <- str_replace(cpc$original_assignee, "Microsoft Corporation", "Microsoft Corp")
+cpc$original_assignee <- str_replace(cpc$original_assignee, "SAP SE ", "SAP SE")
+
+```
+
+## 計算cpc數量(不分類別)
+```{r}
+## 每間公司cpc 總數
+cpc_count <- aggregate(cpc$patentCitation, list(cpc$original_assignee), length) #length 算個數
+
+## 每間公司每年cpc總數
+cpc_year <- aggregate(cpc$patentCitation, list(cpc$original_assignee,cpc$appDate_Y), length)
+cpc_year
+```
+
+```{r}
+#匯出CSV檔
+# write.csv(cpc_count,file="每間公司cpc總數_V1.csv",row.names = F)
+# write.csv(cpc_year,file="每間公司每年cpc總數_V1.csv",row.names = F)
+```
+
+
+# 取出cpc類別之前處理 跑很久，注意！！
+
+```{r}
+library(tidyr)
+```
+
+```{r}
+# 將每一字串分割成 6 欄，並新增至 Data Frame 中
+clean_cpc <- separate(cpc, patentCitation, c("pto1","pto", "patentNumber1", "patentNumber", "kindcode1", "kindcode","appDate1", "appDate","assignee1", "assignee","classification","classification_1",'classification_2','classification_3','classification_4','classification_5'), ":")
+clean_cpc_1 <- separate(cpc, patentCitation, c("pto", "patentNumber", "kindcode", "appDate", "assignee","classification","classification_1",'classification_2','classification_3','classification_4','classification_5'), ",")
+```
+
+```{r}
+## appDate 不為空
+appDate_clean <-clean_cpc[!is.na(clean_cpc$appDate),] 
+names(appDate_clean)[names(appDate_clean) == 'appDate1'] <- "appDate2"
+names(appDate_clean)[names(appDate_clean) == 'appDate'] <- "appDate1"
+names(appDate_clean)[names(appDate_clean) == 'appDate2'] <- "appDate1"
+
+```
+
+```{r}
+install.packages('plyr')
+library(plyr)
+```
+
+```{r}
+clean_cpc <- clean_cpc[is.na(clean_cpc$appDate),] 
+```
+
+```{r}
+clean_cpc <- rbind.fill(clean_cpc, appDate_clean)
+```
+
+
+```{r}
+#整理欄位
+clean_cpc_1$pto <- gsub("[[:punct:]]","",clean_cpc_1$pto)
+clean_cpc_1$pto <- gsub("pto","", clean_cpc_1$pto)
+clean_cpc_1$pto <- gsub("[[:blank:]]","",clean_cpc_1$pto)
+
+clean_cpc_1$patentNumber <- gsub("[[:punct:]]","",clean_cpc_1$patentNumber)
+clean_cpc_1$patentNumber <- gsub("patentNumber","", clean_cpc_1$patentNumber)
+clean_cpc_1$patentNumber <- gsub("[[:blank:]]","",clean_cpc_1$patentNumber)
+
+clean_cpc_1$kindcode <- gsub("[[:punct:]]","",clean_cpc_1$kindcode)
+clean_cpc_1$kindcode <- gsub("kindcode","", clean_cpc_1$kindcode)
+clean_cpc_1$kindcode <- gsub("[[:blank:]]","",clean_cpc_1$kindcode)
+
+clean_cpc_1$appDate <- gsub("[[:punct:]]","",clean_cpc_1$appDate)
+clean_cpc_1$appDate <- gsub("appDate","", clean_cpc_1$appDate)
+clean_cpc_1$appDate <- gsub("[[:blank:]]","",clean_cpc_1$appDate)
+
+clean_cpc_1$assignee <- gsub("[[:punct:]]","",clean_cpc_1$assignee)
+clean_cpc_1$assignee <- gsub("assignee","", clean_cpc_1$assignee)
+clean_cpc_1$assignee <- str_trim(clean_cpc_1$assignee, side = c("left"))
+# clean_cpc_1$assignee <- gsub("[[:blank:]]","",clean_cpc_1$assignee)
+```
+
+```{r}
+#classification:主df和classificationc欄位合併
+m <- clean_cpc %>% select(X, appDate1) 
+cpc_res <- merge(x = clean_cpc_1 , y = m, by = "X")
+
+#刪除不必要欄位
+cpc_res[10:11] <- NULL
+```
+
+```{r}
+#整理classification欄位、刪除標點符號及空白
+names(cpc_res)[names(cpc_res) == 'appDate1'] <- "classification"
+cpc_res$classification <- gsub("[[:punct:]]","",cpc_res$classification)
+cpc_res$classification <- gsub("[[:blank:]]","",cpc_res$classification)
+
+#將classification取前三碼
+cpc_res$CPC_3 <- substring(cpc_res$classification,1,3)
+```
+
+```{r}
+head(cpc_res)
+```
+
+
+## 計算CPC類別
+
+```{r}
+## 每間公司每年cpc各類別總數
+cpc_class <- aggregate(cpc_res$CPC_3, list(cpc_res$original_assignee,cpc_res$appDate_Y, cpc_res$CPC_3), length)
+cpc_class <- arrange(cpc_class, Group.1, Group.2) # 按 Group.1 + Group.2 列進行升序排列
+cpc_class
+```
+
+```{r}
+cpc_class_year <- arrange(cpc_class, Group.2,desc(x)) # 按 Group.1 + Group.2 列進行升序排列
+cpc_class_year
+```
+
+
+```{r}
+#匯出CSV檔
+# write.csv(cpc_res,file="CPC_V1.csv",row.names = F)
+# write.csv(cpc_class,file="cpc_class_V1.csv",row.names = F)
+```
+
+# 計算每一年類別的總數(不分公司)
+```{r}
+
+```
+
+# 計算公司每一類別的每年總數
+```{r}
+
+```
+
+#可以用meger by year將 每一年類別的總數(不分公司) merge進去 公司每一類別的每年總數

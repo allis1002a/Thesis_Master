@@ -1,0 +1,88 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+```{r}
+library(dplyr)
+library(lubridate)
+library(tidyr)
+library(stringr)
+```
+
+```{r}
+upper = read.csv('cpc_class_V1.csv', col.names =c('firm','year','class','class_num'))
+upper
+```
+
+```{r}
+
+# lower 由類別的角度來看，不去考慮一個專利權有多個類別，去計算今年類別出現的次數(不分公司)。
+# lower <- aggregate(upper$class_num, list(upper$year), sum)
+# names(lower)[names(lower) == 'Group.1'] <- "year"
+# names(lower)[names(lower) == 'x'] <- "class_total"
+
+
+# lower 由類別的角度來看，不去考慮一個專利權有多個類別，去計算公司今年類別出現的次數。
+# lower <- aggregate(upper$class_num, list(upper$firm,upper$year), sum)
+# names(lower)[names(lower) == 'Group.1'] <- "firm"
+# names(lower)[names(lower) == 'Group.2'] <- "year"
+# names(lower)[names(lower) == 'x'] <- "class_total"
+
+# lower:公司每年專利權數量 因為一個專利權可能有多個類別因此數量更少
+# lower <- read.csv('patents_num_year_V2.csv', col.names = c('firm', 'year', 'patents_num'))
+
+# lower:每年專利權的各類別總數
+lower <- aggregate(upper$class_num, list(upper$year,upper$class), sum)
+names(lower)[names(lower) == 'Group.1'] <- "year"
+names(lower)[names(lower) == 'Group.2'] <- "class"
+names(lower)[names(lower) == 'x'] <- "class_y_total"
+# 
+# lower
+```
+
+```{r}
+IO_pre = left_join(upper, lower, by=c("year" = "year"))
+IO_pre
+```
+
+```{r}
+# 公司每一年專利總數
+IO_pre$IO_Score <- (IO_pre$class_num/IO_pre$class_total)^2
+IO_pre
+
+
+# lower:每年專利權的各類別總數
+# IO_pre$IO_Score <- (1-IO_pre$class_num/IO_pre$class_y_total)^2
+
+```
+
+```{r}
+IO_Score_sum <- aggregate(IO_pre$IO_Score, list(IO_pre$firm,IO_pre$year), sum) 
+names(IO_Score_sum)[names(IO_Score_sum) == 'Group.1'] <- "firm"
+names(IO_Score_sum)[names(IO_Score_sum) == 'Group.2'] <- "year"
+names(IO_Score_sum)[names(IO_Score_sum) == 'x'] <- "IO_Score_sum"
+
+IO_Score_sum
+
+# 今年類別出現的次數(不分公司)-->反而分母太大，至使數值太小，減完後反而趨近於一
+IO_Score_sum$originality <- 1-IO_Score_sum$IO_Score_sum
+```
+
+
+```{r}
+#匯出CSV檔
+write.csv(IO_Score_sum,file="IO_Score_sum_V1.csv",row.names = F)
+```
+
+```{r}
+# IO計算轉往 RD-5.ipynb，匯出Ori_5_V1.csv[已經取mean後]
+```
+
+```{r}
+Ori_5 <- read_csv('~/Desktop/論文/資料集/dataset/tidy_up/財務資料/Ori_5_V1.csv')
+```
+
+```{r}
+# IO_pre$originarity <- (1-(IO_pre$IO_Score_sum*1))
+```
+

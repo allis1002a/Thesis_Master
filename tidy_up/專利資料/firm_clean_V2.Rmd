@@ -1,0 +1,17 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+```{r}
+cp_list = read.csv('firm_clean.csv')
+```
+
+```{r}
+cp_list$cp_name <- gsub("[[:punct:]]","",cp_list$cp_name)
+cp_list$cp_name <- str_trim(cp_list$cp_name, side = c("both"))
+```
+
+```{r}
+write.csv(cp_list,file="firm_clean_V2.csv",row.names = F)
+```
+

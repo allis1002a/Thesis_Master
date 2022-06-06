@@ -1,0 +1,108 @@
+---
+title: "R Notebook"
+output:
+  html_document:
+    df_print: paged
+---
+```{r}
+library(dplyr)
+library(lubridate)
+library(tidyr)
+library(stringr)
+```
+
+# R&D資料整理
+```{r}
+financial = read.csv('財務資料_variables_final_V2.csv')
+```
+
+```{r}
+RD <- financial %>% select(Company.Name, datadate, Research.Development_Expense)
+names(RD)[names(RD) == 'Company.Name'] <- "firm"
+names(RD)[names(RD) == 'Research.Development_Expense'] <- "RD_expense"
+RD$datadate <- ymd(RD$datadate) 
+RD$year <-year(RD$datadate)
+
+##
+RD$firm <- gsub("[[:punct:]]","",RD$firm)
+RD$firm <- str_trim(RD$firm, side = c("left"))
+```
+
+# patent資料整理
+```{r}
+patent_year_all = read.csv('patents_num_year_V2.csv', col.names =c('firm','year','patent_total'))
+```
+
+```{r}
+patent_year_all
+```
+
+```{r}
+IE_cp = inner_join(patent_year_all, RD, by=c("firm" = "firm", "year" = "year"))  #以財務資料為基底，因年份為空值沒有關係
+IE_cp$firm %>% unique() %>% length() #60間符合
+arrange(IE_cp, firm,year)
+```
+
+
+```{r}
+IE_pre = right_join(patent_year_all, RD, by=c("firm" = "firm", "year" = "year"))  #以財務資料為基底，因年份為空值沒有關係
+IE_pre$firm %>% unique() %>% length() #96間符合
+arrange(IE_pre, firm,year)
+```
+
+```{r}
+RD_5 = read.csv('~/Desktop/論文/資料集/dataset/tidy_up/財務資料/RD_5_V3.csv')
+RD_5_join = RD_5 %>% select(firm,RD_5_2016,RD_5_2017,RD_5_2018,RD_5_2019,RD_5_2020,RD_5_2021)
+
+
+RD_5_join <-RD_5_join %>% pivot_longer(cols = RD_5_2016:RD_5_2021,names_to = 'year',values_to = 'RD_5') 
+RD_5_join$year <- str_replace(RD_5_join$year, "RD_5_2016", "2016") 
+RD_5_join$year <- str_replace(RD_5_join$year, "RD_5_2017", "2017")
+RD_5_join$year <- str_replace(RD_5_join$year, "RD_5_2018", "2018")
+RD_5_join$year <- str_replace(RD_5_join$year, "RD_5_2019", "2019")
+RD_5_join$year <- str_replace(RD_5_join$year, "RD_5_2020", "2020")
+RD_5_join$year <- str_replace(RD_5_join$year, "RD_5_2021", "2021")
+
+
+RD_5_join$year <- as.numeric(RD_5_join$year)
+```
+
+```{r}
+IE_pre = left_join(IE_pre, RD_5_join, by=c("firm" = "firm", "year" = "year"))  #以財務資料為基底，因年份為空值沒有關係
+IE_pre
+```
+
+```{r}
+y_list = IE_pre$year %>% unique()
+IE_year =data_frame()
+for (y in y_list){
+a <- IE_pre %>% filter(year==y) %>% mutate(IE = patent_total/RD_5)
+
+IE_year <- rbind(IE_year, a)
+}
+IE_year = IE_year %>% group_by(firm) %>% arrange(firm,year)
+IE_year[is.na(IE_year)] <- 0
+IE_year
+```
+
+```{r}
+unique(RD$firm) %>% length()
+unique(IE_pre$firm) %>% length()
+unique(patent_year_all$firm) %>% length() #patent只有76家＝利用公司名單直接從資料庫抓下來的
+# unique(cpc_year_all_sis$firm) %>% length()
+```
+
+```{r}
+#匯出CSV檔
+# write.csv(IE_year,file="IE_year_V2.csv",row.names = F)
+```
+
+
+```{r}
+combinecp_list <-  IE_cp$firm %>% unique() #60間符合
+```
+
+```{r}
+#匯出CSV檔
+write.csv(combinecp_list,file="combinecp_list.csv",row.names = F)
+```

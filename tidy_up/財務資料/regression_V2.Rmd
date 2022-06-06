@@ -1,0 +1,158 @@
+---
+title: "regression"
+output: 
+  html_document:
+    theme: cerulean
+    toc: yes
+    toc_depth: 2
+    toc_float: true
+    number_sections: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+require(foreign) 
+require(plm) 
+require(lmtest)
+library(dplyr)
+library(lubridate)
+library(readxl)  
+```
+
+# 讀取檔案
+```{r}
+data = read.csv('財務資料_variables_final_V2.csv')
+```
+
+
+# 補值-mean
+### 補MS_SG.A遺漏值
+```{r}
+# 以下用平均數，來填補某一欄位的遺漏值
+mean.data <- data
+
+mean.1 <- mean(mean.data[, 27], na.rm = T)  # 第一欄位的平均數
+na.rows <- is.na(mean.data[, 27])           # 第一欄位中，有遺漏值存在的資料
+
+# 用第一欄位的平均數，填補第一欄位的遺漏值
+mean.data[na.rows, 27] <- mean.1
+```
+
+### 補MS_Advertising遺漏值
+```{r}
+# 以下用平均數，來填補某一欄位的遺漏值
+mean.data <- data
+
+mean.1 <- mean(mean.data[, 26], na.rm = T)  # 第一欄位的平均數
+na.rows <- is.na(mean.data[, 26])           # 第一欄位中，有遺漏值存在的資料
+
+# 用第一欄位的平均數，填補第一欄位的遺漏值
+mean.data[na.rows, 26] <- mean.1
+```
+
+### 補Ad_expense遺漏值
+```{r}
+# 以下用平均數，來填補某一欄位的遺漏值
+mean.data <- data
+
+mean.1 <- mean(mean.data[, 18], na.rm = T)  # 第一欄位的平均數
+na.rows <- is.na(mean.data[, 18])           # 第一欄位中，有遺漏值存在的資料
+
+# 用第一欄位的平均數，填補第一欄位的遺漏值
+mean.data[na.rows, 18] <- mean.1
+```
+
+
+# OCF
+
+```{r}
+data <- mutate(data,YEAR=year(data$datadate)) 
+names(data)
+```
+
+## Fama-MacBeth Regression 
+### 論文OCF
+```{r}
+fpmg_OCF <- pmg(OCF_2021 ~ MS_CapEx+MS_R.D+MS_Leverage+delta_OCF, data, index=c("Company.Name"))  # 已補缺值，MS_Advertising,MS_SG.A 仍會出錯
+summary(fpmg_OCF)
+```
+
+### normalized OCF
+```{r}
+fpmg_OCF_norm <- pmg(OCF_norm_2021 ~ MS_CapEx+MS_R.D+MS_Leverage+delta_OCF, data, index=c("Company.Name"))  
+summary(fpmg_OCF_norm)
+```
+
+## linear regression
+### 論文 OCF
+```{r}
+#lm(formula,data)
+lm_OCF <- lm(OCF_2021 ~ MS_CapEx+MS_R.D+MS_Leverage+delta_OCF+MS_Advertising+MS_SG.A, data, index=c("Company.Name"))  
+summary(lm_OCF)
+```
+
+### normalized OCF
+```{r}
+lm_OCF_norm <- lm(OCF_norm_2021 ~ MS_CapEx+MS_R.D+MS_Leverage+delta_OCF+MS_Advertising+MS_SG.A, data, index=c("Company.Name"))  
+summary(lm_OCF_norm)
+```
+
+# ROA
+## Fama-MacBeth Regression 
+
+```{r}
+fpmg_ROA <- pmg(ROA_2021 ~ MS_CapEx+MS_R.D+MS_Leverage+delta_ROA, data, index=c("Company.Name")) # YEAR,MS_Advertising,MS_SG.A 仍會出錯
+summary(fpmg_ROA)
+```
+## linear regression
+```{r}
+#lm(formula,data)
+lm_ROA <- lm(ROA_2021 ~ MS_CapEx+MS_R.D+MS_Leverage+delta_ROA+MS_Advertising+MS_SG.A, data, index=c("YEAR","Company.Name"))  
+summary(lm_ROA)
+```
+
+# ROE
+## Fama-MacBeth Regression 
+
+```{r}
+fpmg_ROE <- pmg(ROE_2021 ~ MS_CapEx+MS_R.D+MS_Leverage+delta_ROA+delta_OCF+MS_OCF, data, index=c("Company.Name"))
+summary(fpmg_ROE)
+```
+
+## linear regression
+```{r}
+#lm(formula,data)
+lm_ROE <- lm(ROE_2021 ~ MS_CapEx+MS_R.D+MS_Leverage+delta_ROA+delta_OCF+MS_OCF+MS_Advertising+MS_SG.A, data, index=c("YEAR","Company.Name"))  
+summary(lm_ROE)
+```
+
+
+# 雜
+<!-- Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot. -->
+
+<!-- ### normalized ROA -->
+<!-- ```{r} -->
+<!-- fpmg_ROA_norm <- pmg(ROA_norm ~ RD.ME+RDI+RDD, ROA_norm_data, index=c("YEAR","Company.Name"))  #OCF改報酬率/normalize -->
+<!-- summary(fpmg_ROA_norm) -->
+<!-- ``` -->
+
+<!-- ### normalized ROA -->
+<!-- ```{r} -->
+<!-- lm_ROA_norm <- lm(ROA_norm ~ RD.ME+RDI+RDD, ROA_norm_data, index=c("YEAR","Company.Name")) -->
+<!-- summary(lm_ROA_norm) -->
+<!-- ``` -->
+
+<!-- ### normalized ROE -->
+<!-- ```{r} -->
+<!-- fpmg_ROE_norm <- pmg(ROE_norm ~ RD.ME+RDI+RDD, ROE_norm_data, index=c("YEAR","Company.Name"))  #OCF改報酬率/normalize -->
+<!-- summary(fpmg_ROE_norm) -->
+<!-- ``` -->
+
+<!-- ### normalized ROE -->
+<!-- ```{r} -->
+<!-- lm_ROE_norm <- lm(ROE_norm ~ RD.ME+RDI+RDD, ROE_norm_data, index=c("YEAR","Company.Name")) -->
+<!-- summary(lm_ROE_norm) -->
+<!-- ``` -->

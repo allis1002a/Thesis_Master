@@ -1,0 +1,271 @@
+---
+title: "regression"
+output: 
+  html_document:
+    theme: cerulean
+    toc: yes
+    toc_depth: 2
+    toc_float: true
+    number_sections: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+install.packages("plm", dependencies=TRUE)
+```
+
+
+```{r}
+require(foreign) 
+library(plm)
+library(lmtest)
+library(dplyr)
+library(lubridate)
+library(readxl)
+library(tidyverse)
+```
+
+# 讀取檔案(IO/IE/patent_num)
+
+```{r}
+Ori_5 <- read.csv('~/Desktop/論文/資料集/dataset/tidy_up/財務資料/Ori_5_V1.csv')
+IE_5 <- read.csv('IE_year_V2.csv')
+
+combinecp_list <- read.csv('combinecp_list.csv')
+```
+
+```{r}
+names(Ori_5)
+names(IE_5)
+```
+
+# 讀取財務資料
+```{r}
+financial = read.csv('財務資料_variables_final_V2.csv')
+financial <- mutate(financial,YEAR=year(financial$datadate))
+financial_data <- financial %>% select(Company.Name,YEAR, ROA_2021,OCF_2021,OCF_norm_2021,ROE_2021)
+names(financial)
+```
+
+# 合併財務和專利資料
+```{r}
+#整理財務資料的col_name
+names(financial_data)[names(financial_data) == 'Company.Name'] <- "firm"
+names(financial_data)[names(financial_data) == 'YEAR'] <- "year"
+
+#整理IO資料
+IO_pre <- Ori_5 %>% select(firm,Ori_5_2015,Ori_5_2016,Ori_5_2017,Ori_5_2018,Ori_5_2019,Ori_5_2020,Ori_5_2021)
+names(IO_pre)[names(IO_pre) == 'Ori_5_2015'] <- "2015"
+names(IO_pre)[names(IO_pre) == 'Ori_5_2016'] <- "2016"
+names(IO_pre)[names(IO_pre) == 'Ori_5_2017'] <- "2017"
+names(IO_pre)[names(IO_pre) == 'Ori_5_2018'] <- "2018"
+names(IO_pre)[names(IO_pre) == 'Ori_5_2019'] <- "2019"
+names(IO_pre)[names(IO_pre) == 'Ori_5_2020'] <- "2020"
+names(IO_pre)[names(IO_pre) == 'Ori_5_2021'] <- "2021"
+
+IO <- IO_pre %>% 
+  pivot_longer(cols = `2015`:`2021`,names_to = 'year',values_to = 'originarity')
+IO$year <- as.numeric(IO$year)
+
+reg_pre = left_join(financial_data, IE_5, by=c("firm" = "firm","year" = "year"))
+reg = left_join(reg_pre, IO, by=c("firm" = "firm","year" = "year"))
+
+reg[is.na(reg)] <- 0
+```
+
+# 整理5年資料(2016:2020)
+```{r}
+reg_5 <- reg %>% filter(year==2016|year==2017|year==2018|year==2019|year==2020)
+```
+
+# 補值
+```{r}
+require(mice)
+```
+## (1)MICE
+```{r}
+reg[reg == 0] <- NA
+
+mice.data <- mice(reg,
+                  m = 3,           # 產生三個被填補好的資料表
+                  maxit = 50,      # max iteration
+                  method = "cart", # 使用CART決策樹，進行遺漏值預測
+                  seed = 188)      # set.seed()，令抽樣每次都一樣
+
+# 原始資料(有遺漏值)
+reg
+
+# 填補好的資料：因為m=3，所以會有三個填補好的資料集，可以用以下方式取出
+
+reg_mice_v1<-complete(mice.data, 1) # 1st data
+reg_mice_v2<-complete(mice.data, 2) # 2nd data
+reg_mice_v3<-complete(mice.data, 3) # 3rd data
+```
+
+## (2)平均數補值
+```{r}
+# 以下用平均數，來填補某一欄位的遺漏值
+mean.data <- reg
+
+mean.1 <- mean(mean.data[, 10], na.rm = T)  # RD_5
+na.rows <- is.na(mean.data[, 10])           
+mean.2 <- mean(mean.data[, 11], na.rm = T)  # IE
+na.rows_2 <- is.na(mean.data[, 11]) 
+mean.3 <- mean(mean.data[, 12], na.rm = T)  # originarity
+na.rows_3 <- is.na(mean.data[, 12]) 
+mean.4 <- mean(mean.data[, 7], na.rm = T)  # patent_total
+na.rows_4 <- is.na(mean.data[, 7]) 
+# 用第一欄位的平均數，填補第一欄位的遺漏值
+mean.data[na.rows, 10] <- mean.1
+mean.data[na.rows_2, 11] <- mean.2
+mean.data[na.rows_3, 12] <- mean.3
+mean.data[na.rows_4, 7] <- mean.4
+```
+
+
+# OCF
+## Fama-MacBeth Regression 
+### 論文OCF (測試：(1)reg-補0,(2)reg-MICE(1),(3)reg-MICE(2),(4)reg-MICE(3),(5)reg-補平均數)
+
+```{r}
+#(1)reg-補0
+reg[is.na(reg)] <- 0
+fpmg_OCF <- pmg(OCF_2021 ~ originarity+IE+patent_total, reg, index=c("firm","year"))  # 已補缺值，MS_Advertising,MS_SG.A 仍會出錯
+summary(fpmg_OCF)
+```
+
+
+```{r}
+fpmg_OCF <- pmg(OCF_2021 ~ originarity+IE, reg_mice_v1, index=c("firm","year"))  # 已補缺值，MS_Advertising,MS_SG.A 仍會出錯
+summary(fpmg_OCF)
+```
+
+```{r}
+fpmg_OCF <- pmg(OCF_2021 ~ originarity+IE, reg_mice_v2, index=c("firm","year"))  # 已補缺值，MS_Advertising,MS_SG.A 仍會出錯
+summary(fpmg_OCF)
+```
+
+```{r}
+fpmg_OCF <- pmg(OCF_2021 ~ originarity+IE, reg_mice_v3, index=c("firm","year"))  # 已補缺值，MS_Advertising,MS_SG.A 仍會出錯
+summary(fpmg_OCF)
+```
+
+
+### normalized OCF
+```{r}
+fpmg_OCF_norm <- pmg(OCF_norm_2021 ~ MS_CapEx+MS_R.D+MS_Leverage+delta_OCF, data, index=c("Company.Name"))  
+summary(fpmg_OCF_norm)
+```
+
+## linear regression
+### 論文 OCF
+```{r}
+#lm(formula,data)
+lm_OCF <- lm(OCF_2021 ~ originarity+IE, reg_5, index=c("firm"))  
+summary(lm_OCF)
+```
+
+### normalized OCF
+```{r}
+lm_OCF_norm <- lm(OCF_norm_2021 ~ MS_CapEx+MS_R.D+MS_Leverage+delta_OCF+MS_Advertising+MS_SG.A, data, index=c("Company.Name"))  
+summary(lm_OCF_norm)
+```
+
+# ROA
+## Fama-MacBeth Regression 
+
+```{r}
+fpmg_ROA <- pmg(ROA_2021 ~ MS_CapEx+MS_R.D+MS_Leverage+delta_ROA, data, index=c("Company.Name")) # YEAR,MS_Advertising,MS_SG.A 仍會出錯
+summary(fpmg_ROA)
+```
+## linear regression
+```{r}
+#lm(formula,data)
+lm_ROA <- lm(ROA_2021 ~ MS_CapEx+MS_R.D+MS_Leverage+delta_ROA+MS_Advertising+MS_SG.A, data, index=c("YEAR","Company.Name"))  
+summary(lm_ROA)
+```
+
+# ROE
+## Fama-MacBeth Regression 
+
+```{r}
+fpmg_ROE <- pmg(ROE_2021 ~ MS_CapEx+MS_R.D+MS_Leverage+delta_ROA+delta_OCF+MS_OCF, data, index=c("Company.Name"))
+summary(fpmg_ROE)
+```
+
+## linear regression
+```{r}
+#lm(formula,data)
+lm_ROE <- lm(ROE_2021 ~ MS_CapEx+MS_R.D+MS_Leverage+delta_ROA+delta_OCF+MS_OCF+MS_Advertising+MS_SG.A, data, index=c("YEAR","Company.Name"))  
+summary(lm_ROE)
+```
+
+# 補值-mean
+### 補MS_SG.A遺漏值
+```{r}
+# 以下用平均數，來填補某一欄位的遺漏值
+mean.data <- data
+
+mean.1 <- mean(mean.data[, 27], na.rm = T)  # 第一欄位的平均數
+na.rows <- is.na(mean.data[, 27])           # 第一欄位中，有遺漏值存在的資料
+
+# 用第一欄位的平均數，填補第一欄位的遺漏值
+mean.data[na.rows, 27] <- mean.1
+```
+
+### 補MS_Advertising遺漏值
+```{r}
+# 以下用平均數，來填補某一欄位的遺漏值
+mean.data <- data
+
+mean.1 <- mean(mean.data[, 26], na.rm = T)  # 第一欄位的平均數
+na.rows <- is.na(mean.data[, 26])           # 第一欄位中，有遺漏值存在的資料
+
+# 用第一欄位的平均數，填補第一欄位的遺漏值
+mean.data[na.rows, 26] <- mean.1
+```
+
+### 補Ad_expense遺漏值
+```{r}
+# 以下用平均數，來填補某一欄位的遺漏值
+mean.data <- data
+
+mean.1 <- mean(mean.data[, 18], na.rm = T)  # 第一欄位的平均數
+na.rows <- is.na(mean.data[, 18])           # 第一欄位中，有遺漏值存在的資料
+
+# 用第一欄位的平均數，填補第一欄位的遺漏值
+mean.data[na.rows, 18] <- mean.1
+```
+
+
+
+
+# 雜
+<!-- Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot. -->
+
+<!-- ### normalized ROA -->
+<!-- ```{r} -->
+<!-- fpmg_ROA_norm <- pmg(ROA_norm ~ RD.ME+RDI+RDD, ROA_norm_data, index=c("YEAR","Company.Name"))  #OCF改報酬率/normalize -->
+<!-- summary(fpmg_ROA_norm) -->
+<!-- ``` -->
+
+<!-- ### normalized ROA -->
+<!-- ```{r} -->
+<!-- lm_ROA_norm <- lm(ROA_norm ~ RD.ME+RDI+RDD, ROA_norm_data, index=c("YEAR","Company.Name")) -->
+<!-- summary(lm_ROA_norm) -->
+<!-- ``` -->
+
+<!-- ### normalized ROE -->
+<!-- ```{r} -->
+<!-- fpmg_ROE_norm <- pmg(ROE_norm ~ RD.ME+RDI+RDD, ROE_norm_data, index=c("YEAR","Company.Name"))  #OCF改報酬率/normalize -->
+<!-- summary(fpmg_ROE_norm) -->
+<!-- ``` -->
+
+<!-- ### normalized ROE -->
+<!-- ```{r} -->
+<!-- lm_ROE_norm <- lm(ROE_norm ~ RD.ME+RDI+RDD, ROE_norm_data, index=c("YEAR","Company.Name")) -->
+<!-- summary(lm_ROE_norm) -->
+<!-- ``` -->
